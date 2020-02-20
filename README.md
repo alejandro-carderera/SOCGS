@@ -1,7 +1,7 @@
 # Second-order-Conditional-Gradients
 Second-order Conditional Gradients Code
 
-#Download the Gisette dataset for the L1 ball experiment.
+#Download the Gisette dataset for the L1 ball experiment at:
 https://archive.ics.uci.edu/ml/datasets/Gisette
 
 #To run the Birkhoff experiment:
