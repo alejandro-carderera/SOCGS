@@ -83,102 +83,38 @@ def performUpdate(function, x, gap, fVal, timing, gapVal):
     timing.append(time.time())
     return
 
-#Performs projections onto the simplex.
-def project_onto_simplex(vect, s = 1):
-    assert s > 0, "Radius s must be strictly positive (%d <= 0)" % s
-    n, = vect.shape  # will raise ValueError if v is not 1-D
-    if vect.sum() == s and np.alltrue(vect >= 0):
-        return vect
-    v = vect - np.max(vect)
-    u = np.sort(v)[::-1]
-    cssv = np.cumsum(u)
-    rho = np.count_nonzero(u * np.arange(1, n+1) > (cssv - s))-1
-    theta = float(cssv[rho] - s) / (rho+1)
-    w = (v - theta).clip(min=0)
-    return w
-
-#Performs projections onto the L1 Unit ball.
-def project_onto_L1UnitBall(v):
-    u = np.abs(v)
-    if u.sum() <= 1.0:
-        return v
-    w = project_onto_simplex(u)
-    w *= np.sign(v)
-    return w
-
-#Performs projections onto the L2 Unit ball.
-def project_onto_L2UnitBall(v):
-    if(np.linalg.norm(v) > 1.0):
-        return v/np.linalg.norm(v)
-    else:
-        return v
-
 #Pick a stepsize.
 def stepSize(function, d, grad, x, typeStep = "EL", maxStep = None):
     if(typeStep == "SS"):
         return -np.dot(grad, d)/(function.largestEig()*np.dot(d, d))
     else:
         if(typeStep == "GS"):
-            options={'xatol': 1e-08, 'maxiter': 500000, 'disp': 0}
-            def InnerFunction(t):  # Hidden from outer code
-                return function.fEval(x + t*d)
-            if(maxStep is None):
-                res = minimize_scalar(InnerFunction, bounds=(0, 1), method='bounded', options = options)
-            else:
-                res = minimize_scalar(InnerFunction, bounds=(0, maxStep), method='bounded', options = options)
-            return res.x
+            tolerance = 1e-08
+            iterations = 500000
+            while(True):
+                options={'xatol': tolerance, 'maxiter': iterations, 'disp': 0}
+                def InnerFunction(t):  # Hidden from outer code
+                    return function.fEval(x + t*d)
+                if(maxStep is None):
+                    res = minimize_scalar(InnerFunction, bounds=(0, 1), method='bounded', options = options)
+                else:
+                    res = minimize_scalar(InnerFunction, bounds=(0, maxStep), method='bounded', options = options)
+                if(function.fEval(x) > function.fEval(x + res.x*d)):
+                    return res.x
+                tolerance /= 100.0
+                iterations *= 100.0
+                if(tolerance < 1.0e-14):
+                    return 1.0e-12
         else:
             return function.lineSearch(grad, d, x)
     
-#Perform a backtrack linesearch.
-# function is the value we'll use for the evaluations.
-# x is the initial point.
-# d is the direction along which we'll move
-# t is the initial stepsize that we'll use
-# grad is the gradient at x.
-def backtrackLineSearchv2(function, x, d, t, grad, descentParam, tmin, maxIter, beta):
-    descentCondition = np.dot(grad, d)
-    fx = function.fEval(x)
-    iterations = 0
-    while True:
-        y = x + t*d
-        fy = function.fEval(y)
-        if(fy < fx + descentCondition*t*descentParam or iterations > maxIter):
-            return t
-        if(t < tmin):
-            return tmin
-        tInterp = - descentCondition*t*t/(2.0*(fy - fx - t*descentCondition))
-        if(0.01 <= tInterp and tInterp <= 0.99*t and abs(fy - fx - t*descentCondition) > 1.0e-9):
-            t = tInterp
-        else:
-            t = t*beta
-        iterations += 1
-        
-def backtrackLineSearch(function, x, proj, grad, alpha = 1.0, beta =  0.005):
-    #Backtracking line search.
-    while(function.fEval(x + beta*(proj - x)) > function.fEval(x) + alpha*beta*np.dot(grad, proj - x)):
-        alpha *= 0.5
-        if(alpha < 1.0e-12):
-            print("Quitting because stepsize is too small.")
-            quit()
-    return alpha
-    
-#Pick a stepsize for decompisition invariant strategy.
+#Pick a stepsize for decomposition invariant strategy.
 #Exact Linesearch: "EL"
 #Fixed Step-size: "FSS"
 #Note that the fixed stepsize requires knowledge of the cardinality of the solution
 #which we do not know a priori.
 def stepSizeDI(function, feasibleReg, it, d, grad, x, typeStep = "EL"):
     return function.lineSearch(grad, d, x)
-#    if(typeStep == "FSS"):
-#        M1 = np.sqrt(function.smallestEig()/(8*len(d)))
-#        M2 = 0.5*function.smallestEig()/feasibleReg.diameter()
-#        return M1/(2*np.sqrt(M2))*(1 - M1**2/(4*M2))**(0.5*(it-1))
-#    else:
-#        if(typeStep == "SS"):
-#            return -np.dot(grad, d)/(function.largestEig()*np.dot(d, d))
-#        else:
-#            return function.lineSearch(grad, d, x)
 
 #Used in the DICG algorithm.
 def calculateStepsize(x, d):

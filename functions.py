@@ -1,9 +1,7 @@
 import numpy as np
-from scipy.sparse import csc_matrix, issparse
-from scipy.linalg import pinvh
+from scipy.sparse import  issparse
 from autograd import hessian
 from scipy.optimize import minimize_scalar
-import math
 
 """# Objective Functions
 
@@ -166,22 +164,12 @@ class GraphicalLasso:
     def fEval(self, X):
         val = X.reshape((self.dim, self.dim))
         (sign, logdet) = np.linalg.slogdet(val)
-        #L1 penalty parameter
-        return -logdet + np.matrix.trace(np.matmul(self.S, val)) + self.lambdaVal*np.sum(np.abs(X))
-#        #L2 penalty parameter
-#        return -logdet + np.matrix.trace(np.matmul(self.S, val)) + self.lambdaVal*np.sum(np.dot(X, X))
-#        #No penalty parameter.
-#        return -logdet + np.matrix.trace(np.matmul(self.S, val))
+        return -logdet + np.matrix.trace(np.matmul(self.S, val)) + self.lambdaVal*np.sum(np.dot(X, X))
     
     #Evaluate gradient.
     def fEvalGrad(self, X):
         val = X.reshape((self.dim, self.dim))
-        #L1 penalty parameter.
-        return (-np.linalg.inv(val) + self.S).flatten() + self.lambdaVal*np.sign(X)
-#        #L2 penalty parameter.
-#        return (-np.linalg.inv(val) + self.S).flatten() + self.lambdaVal*X
-#        #No penalty parameter.
-#        return (-np.linalg.inv(val) + self.S).flatten()
+        return (-np.linalg.inv(val) + self.S).flatten() + self.lambdaVal*X
     
     #Line Search.
     def lineSearch(self, grad, d, x):

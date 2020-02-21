@@ -38,7 +38,7 @@ if __name__== "__main__":
     feasibleRegion = PSDUnitTrace(int(dimension*dimension))
     
     #Time limit spent calculating the reference solution and running the algorithm.
-    TIME_LIMIT_REFERENCE_SOL = int(5*int(sys.argv[2]))
+    TIME_LIMIT_REFERENCE_SOL = int(3*int(sys.argv[2]))
     TIME_LIMIT = int(sys.argv[2])
     
     #Create artificial starting point. Completely random.
@@ -67,10 +67,6 @@ if __name__== "__main__":
     print("\nRunning Lazy AFW.")
     xAFWLazy, FWGapAFWLazy, fValAFWLazy, timingAFWLazy, activeSetLazy, distanceAFWLazy  = runFW(x_0, S_0, alpha_0, fun, feasibleRegion, tolerance, TIME_LIMIT, xTest, FWVariant = "Lazy", typeStep = typeOfStep, criterion = "PG", criterionRef = fValOpt)
     
-    #Run the projected Newton method.
-    print("\nRunning FW Newton (LBFGS).")
-    xFWNLBFGS1, FWGapFWNLBFGS1, fValFWNLBFGS1, timingFWNLBFGS1, activeSetFWNLBFGS1, distanceFWNLBFGS1 = runProjectedNewton(x_0, S_0, alpha_0, fun, feasibleRegion, tolerance, TIME_LIMIT, xTest, criterion = "PG", criterionRef = fValOpt,  Hessian = "LBFGS", ExactLinesearch = True, TypeSolver = "Lazy", forcingParam = 0.99, HessianParam = numberHessianSamples)
-
     print("\nRunning FW Newton (LBFGS).")
     xFWNLBFGS2, FWGapFWNLBFGS2, fValFWNLBFGS2, timingFWNLBFGS2, activeSetFWNLBFGS2, distanceFWNLBFGS2 = runProjectedNewton(x_0, S_0, alpha_0, fun, feasibleRegion, tolerance, TIME_LIMIT, xTest, criterion = "PG", criterionRef = fValOpt,  Hessian = "LBFGS", ExactLinesearch = True, TypeSolver = "Lazy", forcingParam = 0.95, HessianParam = numberHessianSamples)
 
@@ -102,12 +98,6 @@ if __name__== "__main__":
         f.write(str(FWGapFW).replace("[", "").replace("]", "") + "\n")
         f.write(str(timingFW).replace("[", "").replace("]", "") + "\n")
         f.write(str(distanceFW).replace("[", "").replace("]", "") + "\n")
-        f.write("FW Newton LBFGS 0.99"+ "\n")
-        f.write(str([x - fValOpt for x in fValFWNLBFGS1]).replace("[", "").replace("]", "") + "\n")
-        f.write(str(fValFWNLBFGS1).replace("[", "").replace("]", "") + "\n")
-        f.write(str(FWGapFWNLBFGS1).replace("[", "").replace("]", "") + "\n")
-        f.write(str(timingFWNLBFGS1).replace("[", "").replace("]", "") + "\n")
-        f.write(str(distanceFWNLBFGS1).replace("[", "").replace("]", "") + "\n")
         f.write("FW Newton LBFGS 0.95"+ "\n")
         f.write(str([x - fValOpt for x in fValFWNLBFGS2]).replace("[", "").replace("]", "") + "\n")
         f.write(str(fValFWNLBFGS2).replace("[", "").replace("]", "") + "\n")
@@ -143,7 +133,6 @@ if __name__== "__main__":
     
     plt.loglog(np.arange(len(FWGapAFW)) + 1, FWGapAFW, '-', color = 'b',  label = 'AFW')
     plt.loglog(np.arange(len(FWGapFW)) + 1, FWGapFW, '-', color = 'y',  label = 'FW')
-    plt.loglog(np.arange(len(FWGapFWNLBFGS1)) + 1, FWGapFWNLBFGS1, label = 'FW Newton LBFGS 0.99')
     plt.loglog(np.arange(len(FWGapFWNLBFGS2)) + 1, FWGapFWNLBFGS2, label = 'FW Newton LBFGS 0.95')
     plt.loglog(np.arange(len(FWGapFWNLBFGS3)) + 1, FWGapFWNLBFGS3, label = 'FW Newton LBFGS 0.9')
     plt.loglog(np.arange(len(FWGapFWNLBFGS4)) + 1, FWGapFWNLBFGS4, label = 'FW Newton LBFGS 0.8')
@@ -160,7 +149,6 @@ if __name__== "__main__":
     
     plt.semilogy(timingAFW, FWGapAFW, '-', color = 'b',  label = 'AFW')
     plt.semilogy(timingFW, FWGapFW, '-', color = 'y',  label = 'FW')
-    plt.semilogy(timingFWNLBFGS1, FWGapFWNLBFGS1, label = 'FW Newton LBFGS 0.99')
     plt.semilogy(timingFWNLBFGS2, FWGapFWNLBFGS2, label = 'FW Newton LBFGS 0.95')
     plt.semilogy(timingFWNLBFGS3, FWGapFWNLBFGS3, label = 'FW Newton LBFGS 0.9')
     plt.semilogy(timingFWNLBFGS4, FWGapFWNLBFGS4, label = 'FW Newton LBFGS 0.8')
@@ -176,7 +164,6 @@ if __name__== "__main__":
 
     plt.loglog(np.arange(len(fValAFW)) + 1, distanceAFW, '-', color = 'b',  label = 'AFW')
     plt.loglog(np.arange(len(fValFW)) + 1, distanceFW, '-', color = 'y',  label = 'FW')
-    plt.loglog(np.arange(len(fValFWNLBFGS1)) + 1, distanceFWNLBFGS1, label = 'FW Newton LBFGS 0.99')
     plt.loglog(np.arange(len(fValFWNLBFGS2)) + 1, distanceFWNLBFGS2, label = 'FW Newton LBFGS 0.95')
     plt.loglog(np.arange(len(fValFWNLBFGS3)) + 1, distanceFWNLBFGS3, label = 'FW Newton LBFGS 0.9')
     plt.loglog(np.arange(len(fValFWNLBFGS4)) + 1, distanceFWNLBFGS4, label = 'FW Newton LBFGS 0.8')
@@ -192,7 +179,6 @@ if __name__== "__main__":
     
     plt.semilogy(timingAFW, distanceAFW, '-', color = 'b',  label = 'AFW')
     plt.semilogy(timingFW, distanceFW, '-', color = 'y',  label = 'FW')
-    plt.semilogy(timingFWNLBFGS1, distanceFWNLBFGS1, label = 'FW Newton LBFGS 0.99')
     plt.semilogy(timingFWNLBFGS2, distanceFWNLBFGS2, label = 'FW Newton LBFGS 0.95')
     plt.semilogy(timingFWNLBFGS3, distanceFWNLBFGS3, label = 'FW Newton LBFGS 0.9')
     plt.semilogy(timingFWNLBFGS4, distanceFWNLBFGS4, label = 'FW Newton LBFGS 0.8')
@@ -207,7 +193,6 @@ if __name__== "__main__":
     
     plt.loglog(np.arange(len(fValAFW)) + 1, [(x - fValOpt) for x in fValAFW], '-', color = 'b',  label = 'AFW')
     plt.loglog(np.arange(len(fValFW)) + 1, [(x - fValOpt) for x in fValFW], '-', color = 'y',  label = 'FW')
-    plt.loglog(np.arange(len(fValFWNLBFGS1)) + 1, [(x - fValOpt) for x in fValFWNLBFGS1], label = 'FW Newton LBFGS 0.99')
     plt.loglog(np.arange(len(fValFWNLBFGS2)) + 1, [(x - fValOpt) for x in fValFWNLBFGS2], label = 'FW Newton LBFGS 0.95')
     plt.loglog(np.arange(len(fValFWNLBFGS3)) + 1, [(x - fValOpt) for x in fValFWNLBFGS3], label = 'FW Newton LBFGS 0.9')
     plt.loglog(np.arange(len(fValFWNLBFGS4)) + 1, [(x - fValOpt) for x in fValFWNLBFGS4], label = 'FW Newton LBFGS 0.8')
@@ -223,7 +208,6 @@ if __name__== "__main__":
     #Plot Primal gap in terms of time.
     plt.semilogy(timingAFW, [(x - fValOpt) for x in fValAFW], '-', color = 'b',  label = 'AFW')
     plt.semilogy(timingFW, [(x - fValOpt) for x in fValFW], '-', color = 'y',  label = 'FW')
-    plt.semilogy(timingFWNLBFGS1, [(x - fValOpt) for x in fValFWNLBFGS1], label = 'FW Newton LBFGS 0.99')
     plt.semilogy(timingFWNLBFGS2, [(x - fValOpt) for x in fValFWNLBFGS2], label = 'FW Newton LBFGS 0.95')
     plt.semilogy(timingFWNLBFGS3, [(x - fValOpt) for x in fValFWNLBFGS3], label = 'FW Newton LBFGS 0.9')
     plt.semilogy(timingFWNLBFGS4, [(x - fValOpt) for x in fValFWNLBFGS4], label = 'FW Newton LBFGS 0.8')
