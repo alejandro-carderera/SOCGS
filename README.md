@@ -19,12 +19,11 @@ This repository contains the code to compare the performance of the **Second-ord
 2. Inverse covariance estimation over spectrahedron.
 3. Structured logistic regression over <img src="https://render.githubusercontent.com/render/math?math=\ell_1"> unit ball.
 
-The code runs in Python (was tested on Windows). The files include the following:
+The code runs in Python 3.7 (tested on Windows). The files include the following:
 * `algorithms.py` contains the implementations of the SOCGS, CG, ACG, PCG, Lazy ACG, DICG, CGS, and NCG algorithms.
 * `functions.py` contains the objective functions being used in the numerical experiments, as well as the quadratic approximations to those functions.
 * `feasibleRegions.py` contains the linear minimization oracles for the feasible regions used in the numerical experiments.
 * `auxiliaryFunctions.py` contains miscelaneous functions used throughout the code.
-* `feasibleRegions.py` contains the linear minimization oracles for the feasible regions used in the numerical experiments.
 * `runExperimentsSOCGSBirkhoff.py` contains code to reproduce the **Sparse Coding over the Birkhoff polytope** experiment.
 * `runExperimentsSOCGSGLasso.py` contains code to reproduce the **Inverse covariance estimation over spectrahedron** experiment.
 * `runExperimentsSOCGSL1Ball.py` contains code to reproduce the **Structured logistic regression** experiment.
@@ -72,12 +71,12 @@ python runExperimentsSOCGSL1Ball.py --max_time 120 --type_solver PCG --dataset r
 
 Please use the following BibTeX entry to cite this software in your work:
     
-    @article{carderera2020second,
-  title={Second-order Conditional Gradient Sliding},
-  author={Carderera, Alejandro and Pokutta, Sebastian},
-  journal={arXiv preprint arXiv:2002.08907},
-  year={2020}
-}
+        @inproceedings{carderera2020second,
+      author    = {Carderera, Alejandro and Pokutta, Sebastian},
+      title     = {Second-order Conditional Gradient Sliding},
+      journal = {arXiv preprint arXiv:2002.08907},
+      year      = {2020},
+    }
     
 ## Authors
 
