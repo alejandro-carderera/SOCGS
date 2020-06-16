@@ -494,9 +494,9 @@ class QuadApproxInexactHessianLBFGS:
                 self.S = np.hstack((self.S, s.reshape(self.dim, 1)))
                 self.Y = np.hstack((self.Y, y.reshape(self.dim, 1)))
             self.delta = np.dot(y, y) / np.dot(s, y)
-            if self.delta <= 0.0:
-                print("The direction was not a descent direction.")
-                quit()
+#            if self.delta <= 0.0:
+#                print("The direction was not a descent direction.")
+#                quit()
             # Need to delete the first element in the matrix.
             if self.S.shape[1] >= self.m:
                 self.S = np.delete(self.S, 0, 1)

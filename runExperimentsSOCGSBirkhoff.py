@@ -185,7 +185,7 @@ if __name__ == "__main__":
         omega=omega,
     )
 
-    # Decomposition CGS
+    # CGS
     print("\nRunning CGS.")
     CSGAlg = CGS()
     resultsCGS = CSGAlg.run(
@@ -199,8 +199,8 @@ if __name__ == "__main__":
         criterionRef=fValOpt,
     )
 
-    # Decomposition SVRFW
-    print("\nRunning SVRFW.")
+    # SVRFW
+    print("\nRunning SVRCG.")
     resultsSVRCG = runSVRCG(
         x_0,
         fun,
@@ -226,8 +226,8 @@ if __name__ == "__main__":
         criterionRef=fValOpt,
     )
 
-    # Run Lazy AFW
-    print("\nRunning Lazy AFW.")
+    #  Lazy AFW
+    print("\nRunning Lazy ACG.")
     resultsAFWLazy = runCG(
         x_0,
         S_0,
@@ -244,7 +244,7 @@ if __name__ == "__main__":
     )
 
     # Vanilla FW
-    print("\nRunning FW.")
+    print("\nRunning CG.")
     resultsFW = runCG(
         x_0,
         S_0,
@@ -260,8 +260,8 @@ if __name__ == "__main__":
         criterionRef=fValOpt,
     )
 
-    # Vanilla AFW
-    print("\nRunning AFW.")
+    # ACG
+    print("\nRunning ACG.")
     resultsAFW = runCG(
         x_0,
         S_0,
@@ -277,8 +277,8 @@ if __name__ == "__main__":
         criterionRef=fValOpt,
     )
 
-    # Vanilla PFW
-    print("\nRunning PFW.")
+    # PCG
+    print("\nRunning PCG.")
     resultsPFW = runCG(
         x_0,
         S_0,

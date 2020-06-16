@@ -146,7 +146,7 @@ if __name__ == "__main__":
     ##Run to a high Frank-Wolfe primal gap accuracy for later use?
     from auxiliaryFunctions import exportsolution, dump_pickled_object
 
-    print("\nFinding optimal solution to high accuracy using CG Variant.")
+    print("\nFinding optimal solution to high accuracy using ACG.")
     nameAlg, xTest, FWGapTest, fValTest, timingTest, distTest, iterationTest = runCG(
         x_0,
         S_0,
@@ -203,7 +203,7 @@ if __name__ == "__main__":
     # Create list to store all the results.
     results = []
 
-    # Run the projected Newton method.
+    # Run SOCGS
     print("\nSOCGS.")
     resultsSOCGS1 = SOCGS(
         x_0,
@@ -224,8 +224,8 @@ if __name__ == "__main__":
     resultsSOCGS1 = list(resultsSOCGS1)
     resultsSOCGS1[0] = "SOCGS-LBFGS"
 
-    # Run the projected Newton method.
-    print("\nSOCGS.")
+    # Run SOCGS with LBFGS updates
+    print("\nSOCGS with LBFGS updates.")
     resultsSOCGS = SOCGS(
         x_0,
         S_0,
@@ -243,7 +243,7 @@ if __name__ == "__main__":
         maxIter=maxIter,
     )
 
-    # Run Frank-Wolfe Projected Newton Method
+    # Run Newton CG
     print("\nRunning NCG.")
     FrankWolfeProjNewton = NCG(0.96, 1 / 6.0, 2.0)
     resultsNCG = FrankWolfeProjNewton.run(
@@ -263,8 +263,8 @@ if __name__ == "__main__":
         updateHessian=False,
     )
 
-    # Run Lazy AFW
-    print("\nRunning Lazy AFW.")
+    # Run Lazy ACG
+    print("\nRunning Lazy ACG.")
     resultsAFWLazy = runCG(
         x_0,
         S_0,
@@ -280,8 +280,8 @@ if __name__ == "__main__":
         criterionRef=fValOpt,
     )
 
-    # Vanilla FW
-    print("\nRunning FW.")
+    # CG
+    print("\nRunning CG.")
     resultsFW = runCG(
         x_0,
         S_0,
@@ -297,8 +297,8 @@ if __name__ == "__main__":
         criterionRef=fValOpt,
     )
 
-    # Vanilla AFW
-    print("\nRunning AFW.")
+    # ACG
+    print("\nRunning ACG.")
     resultsAFW = runCG(
         x_0,
         S_0,
@@ -314,8 +314,8 @@ if __name__ == "__main__":
         criterionRef=fValOpt,
     )
 
-    # Vanilla PFW
-    print("\nRunning PFW.")
+    # PCG
+    print("\nRunning PCG.")
     resultsPFW = runCG(
         x_0,
         S_0,

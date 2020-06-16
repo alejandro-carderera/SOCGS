@@ -116,7 +116,7 @@ if __name__ == "__main__":
     if not os.path.exists(os.path.join(os.getcwd(), "l1Ball")):
         os.makedirs(os.path.join(os.getcwd(), "l1Ball"))
 
-    print("\nFinding optimal solution to high accuracy.")
+    print("\nFinding optimal solution to high accuracy using ACG.")
     nameAlg, xTest, FWGapTest, fValTest, timingTest, distTest, iterationTest = runCG(
         x_0,
         S_0,
@@ -154,7 +154,7 @@ if __name__ == "__main__":
     # Create list to store all the results.
     results = []
 
-    # Run Frank-Wolfe Projected Newton Method
+    # Run Newton CG
     print("\nRunning NCG.")
     FrankWolfeProjNewton = NCG(0.96, 1 / 6.0, 2.0)
     resultsNCG = FrankWolfeProjNewton.run(
@@ -174,8 +174,8 @@ if __name__ == "__main__":
         updateHessian=False,
     )
 
-    # Vanilla PFW
-    print("\nRunning PFW.")
+    # PCG
+    print("\nRunning PCG.")
     resultsPFW = runCG(
         x_0,
         S_0,
@@ -191,7 +191,7 @@ if __name__ == "__main__":
         criterionRef=fValOpt,
     )
 
-    # Run the projected Newton method.
+    # Run SOCGS
     print("\nSOCGS.")
     resultsSOCGS = SOCGS(
         x_0,
@@ -210,8 +210,8 @@ if __name__ == "__main__":
         maxIter=maxIter,
     )
 
-    # Run Lazy AFW
-    print("\nRunning Lazy AFW.")
+    # Run Lazy ACG
+    print("\nRunning Lazy ACG.")
     resultsAFWLazy = runCG(
         x_0,
         S_0,
@@ -227,8 +227,8 @@ if __name__ == "__main__":
         criterionRef=fValOpt,
     )
 
-    # Vanilla FW
-    print("\nRunning FW.")
+    # CG
+    print("\nRunning CG.")
     resultsFW = runCG(
         x_0,
         S_0,
@@ -244,8 +244,8 @@ if __name__ == "__main__":
         criterionRef=fValOpt,
     )
 
-    # Vanilla AFW
-    print("\nRunning AFW.")
+    # ACG
+    print("\nRunning ACG.")
     resultsAFW = runCG(
         x_0,
         S_0,

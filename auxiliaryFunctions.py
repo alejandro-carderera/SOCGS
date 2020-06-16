@@ -260,11 +260,11 @@ def calculateStepsize(x, d):
 # 3 - "IT": Evaluate number of iterations.
 def exitCriterion(it, f, dualGap, criterion="PG", numCriterion=1.0e-3, critRef=0.0):
     if criterion == "DG":
-        print("Wolfe-Gap: " + str(dualGap))
+#        print("Wolfe-Gap: " + str(dualGap))
         return dualGap < numCriterion
     else:
         if criterion == "PG":
-            print("Primal gap: " + str(f - critRef))
+#            print("Primal gap: " + str(f - critRef))
             return f - critRef < numCriterion
         else:
             return it >= numCriterion
