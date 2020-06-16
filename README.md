@@ -31,7 +31,8 @@ The code runs in Python 3.7 (tested on Windows). The files include the following
 
 ## Reproducing the results from the paper.
 
-In order to reproduce the results from the paper:
+In order to reproduce the results from the paper run the following commands. Note that the code will output images and raw data, which will be stored in file directories created when running the algorithm. In the structured logistic regression example the code should automatically download the datasets used. Reproducing the results from Figures 7, 8, and 9 takes approximately 1-2 hours on a laptop with Windows 10, an Intel Core i7 2.4GHz CPU and 6GB RAM. Figure 10 and 12 take around 15-30 minutes and Figure 11 takes around 12-14 hours.
+
 
 ### Sparse coding over the Birkhoff polytope with <img src="https://render.githubusercontent.com/render/math?math=m = 10,000"> (Figure 7)
 
