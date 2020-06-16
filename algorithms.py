@@ -1,696 +1,1209 @@
 import numpy as np
-import datetime
 import time
-from scipy.sparse.linalg import eigsh
 from scipy.optimize import minimize_scalar
 import math
 
-ts = time.time()
-timestamp = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S').replace(' ', '-').replace(':', '-')
+# Import functions for the stepsizes and the updates.
+from auxiliaryFunctions import (
+    performUpdate,
+    exitCriterion,
+    stepSize,
+    calculateStepsize,
+    stepSizeDI,
+)
 
-#Import functions for the stepsizes and the updates.
-from auxiliaryFunctions import performUpdate, exitCriterion, stepSize, calculateStepsize, stepSizeDI
-
-#Import functions for active set management
+# Import functions for active set management
 from auxiliaryFunctions import newVertexFailFast, deleteVertexIndex, maxMinVertex
 
-#Import the function used in the subproblems.
-
-from scipy import sparse
-
-"""## Conditional Gradient Sliding
-
-Parameters:
-1 --> criterion: Specify if the terminating criterion is the primal gap ("PG") or the
-dual gap ("DG"). If anything else is specified will run for a given number of iterations.
-
-2 --> criterionRef: Value to which the algorithm will run, according to the criterion choosen.
-Will usually include the value with which we calculate the primal gap.
-"""
 
 class CGS:
+    """
+    Run CGS
+
+    Parameters
+    ----------
+    x0 : numpy array.
+        Initial point.
+    function: function being minimized
+        Function that we will minimize.
+    feasibleReg : feasible region function.
+        Returns LP oracles over feasible region.
+    tolerance : float
+        Tolerance to which we solve problem.
+    maxTime : float
+        Maximum number of seconds the algorithm is run.
+    locOpt : numpy array
+        Location of the optimal value (to keep track of distance to optimum)
+    criterion : str
+        Criterion for stopping: Dual gap or primal gap (DG, PG)
+    criterionRef : float
+        Value of the function evaluated at the optimum.
+        
+    Returns
+    -------
+    x
+        Output point
+    FWGap
+        List containing FW gap for points along the run.
+    fVal
+        List containing primal gap for points along the run.
+    timing
+        List containing timing for points along the run.
+    iteration
+        List contains the number of cumulative LP oracle calls performed.
+    distance
+        List containing distance to optimum for points along the run.
+        
+    """
+
     def __init__(self):
+        return
+
+    def run(
+        self,
+        x0,
+        function,
+        feasibleReg,
+        tolerance,
+        maxTime,
+        locOpt,
+        criterion="PG",
+        criterionRef=0.0,
+    ):
         self.iteration = 0
-    def run(self, x0, function, feasibleReg, tolerance, maxTime, locOpt, criterion = "PG", criterionRef = 0.0):
-        #Quantities we want to output.
+        # Quantities we want to output.
         grad = function.fEvalGrad(x0)
         FWGap = [np.dot(grad, x0 - feasibleReg.LPOracle(grad))]
         fVal = [function.fEval(x0)]
         timing = [time.time()]
-        xVal = [np.linalg.norm(x0 - locOpt)]
+        distance = [np.linalg.norm(x0 - locOpt)]
         iteration = [1]
         x = x0.copy()
         self.limit_time = maxTime
         self.initTime = timing[0]
         itCount = 1.0
-        N = int(np.ceil(2*np.sqrt(6.0*function.largestEig()/function.smallestEig())))
+        N = int(
+            np.ceil(2 * np.sqrt(6.0 * function.largestEig() / function.smallestEig()))
+        )
         s = 1.0
-        while(True): 
+        while True:
             x = self.CGSubroutine(function, feasibleReg, x0, FWGap[0], N, s)
-            if(exitCriterion(itCount, fVal[-1], FWGap[-1], criterion = criterion, numCriterion = tolerance, critRef = criterionRef) or time.time() - timing[0] > maxTime):
+            if (
+                exitCriterion(
+                    itCount,
+                    fVal[-1],
+                    FWGap[-1],
+                    criterion=criterion,
+                    numCriterion=tolerance,
+                    critRef=criterionRef,
+                )
+                or time.time() - timing[0] > maxTime
+            ):
                 timing[:] = [t - timing[0] for t in timing]
-                return x, FWGap, fVal, timing, iteration, xVal
+                return "CGS", x, FWGap, fVal, timing, distance, iteration
             grad = function.fEvalGrad(x)
-            performUpdate(function, x, FWGap, fVal, timing, np.dot(grad, x - feasibleReg.LPOracle(grad)))
-            xVal.append(np.linalg.norm(x - locOpt))
-            iteration.append(self.iteration)
-            s += 1.0
+            performUpdate(
+                function,
+                x,
+                FWGap,
+                fVal,
+                timing,
+                np.dot(grad, x - feasibleReg.LPOracle(grad)),
+            )
             itCount += 1
+            distance.append(np.linalg.norm(x - locOpt))
+            iteration.append(itCount)
+            s += 1.0
 
-    #Runs the subroutine with the stepsizes for the number of iterations depicted.
+    # Runs the subroutine with the stepsizes for the number of iterations depicted.
     def CGSubroutine(self, function, feasibleRegion, x0, delta0, N, s):
         L = function.largestEig()
         Mu = function.smallestEig()
         y = x0.copy()
         x = x0.copy()
         for k in range(1, N + 1):
-            gamma = 2.0/(k + 1.0)
-            nu = 8.0*L*delta0*np.power(2, -s)/(Mu*N*k)
-            beta = 2.0*L/k
-            z = (1 - gamma)*y + gamma*x
+            gamma = 2.0 / (k + 1.0)
+            nu = 8.0 * L * delta0 * np.power(2, -s) / (Mu * N * k)
+            beta = 2.0 * L / k
+            z = (1 - gamma) * y + gamma * x
             x = self.CGSuProjection(function.fEvalGrad(z), x, beta, nu, feasibleRegion)
-            if(time.time() - self.initTime > self.limit_time):
+            if time.time() - self.initTime > self.limit_time:
                 return y
-            y = (1 - gamma)*y + gamma*x
+            y = (1 - gamma) * y + gamma * x
         return y
-    
-    #Subroutine used in CGS for str.cvx. smooth functions.
+
+    # Subroutine used in CGS for str.cvx. smooth functions.
     def CGSuProjection(self, g, u, beta, nu, feasibleRegion):
         t = 1
         u_t = u
-        while(True):
-            grad = g + beta*(u_t - u)
-            v = feasibleRegion.LPOracle(grad)      
+        while True:
+            grad = g + beta * (u_t - u)
+            v = feasibleRegion.LPOracle(grad)
             self.iteration += 1
-            V = np.dot(g + beta*(u_t - u), u_t - v)
-            if(time.time() - self.initTime > self.limit_time):
+            V = np.dot(g + beta * (u_t - u), u_t - v)
+            if time.time() - self.initTime > self.limit_time:
                 return u_t
-            if(V <= nu):
-                return u_t 
+            if V <= nu:
+                return u_t
             else:
                 d = v - u_t
-                alphaOpt = -np.dot(grad, d)/(beta*np.dot(d,d))
+                alphaOpt = -np.dot(grad, d) / (beta * np.dot(d, d))
                 alpha = min(1, alphaOpt)
-                #alpha = min(1, np.dot(beta*(u - u_t) - g, v - u_t)/(beta*np.dot(v - u_t, v - u_t)))
-                u_t = (1 - alpha)*u_t + alpha*v
+                # alpha = min(1, np.dot(beta*(u - u_t) - g, v - u_t)/(beta*np.dot(v - u_t, v - u_t)))
+                u_t = (1 - alpha) * u_t + alpha * v
                 t += 1
-                
-class SVRFW:
-    def __init__(self):
-        return
-    
-    def run(self, x0, function, feasibleReg, tolerance, maxTime, locOpt, criterion = "PG", criterionRef = 0.0):
-        #Quantities we want to output.
-        grad = function.fEvalGrad(x0)
-        FWGap = [np.dot(grad, x0 - feasibleReg.LPOracle(grad))]
-        fVal = [function.fEval(x0)]
-        timing = [time.time()]
-        xVal = [np.linalg.norm(x0 - locOpt)]
-        x = x0.copy()
-        itCount_t = 1.0
-        while(True): 
-            N_t = int(math.ceil(np.power(2, itCount_t + 3) - 2))
-            snapShot = function.fEvalGrad(x)
-            snapPoint = x.copy()
-            for k in range(0, N_t):
-                m_k = int(math.ceil(96.0 * (k + 2)))
-                StochGrad = function.fEvalGradStoch(x, snapShot, snapPoint, m_k)
-                v = feasibleReg.LPOracle(StochGrad)
-                gamma_k = 2.0 / (k + 2)
-                x = x + gamma_k*(v - x)
-                if(exitCriterion(itCount_t, fVal[-1], FWGap[-1], criterion = criterion, numCriterion = tolerance, critRef = criterionRef) or timing[-1] - timing[0] > maxTime):
-                    timing[:] = [t - timing[0] for t in timing]
-                    return x, FWGap, fVal, timing,  xVal
-            grad = function.fEvalGrad(x)
-            performUpdate(function, x, FWGap, fVal, timing, np.dot(grad, x - feasibleReg.LPOracle(grad)))
-            xVal.append(np.linalg.norm(x - locOpt))
-            if(exitCriterion(itCount_t, fVal[-1], FWGap[-1], criterion = criterion, numCriterion = tolerance, critRef = criterionRef) or timing[-1] - timing[0] > maxTime):
-                timing[:] = [t - timing[0] for t in timing]
-                return x, FWGap, fVal, timing,  xVal
-            itCount_t += 1
-            
-"""## Away FW, Pairwise FW, AFW Lazy
 
-Parameters:
-1 --> FWVariant: Specifies if we want to run the Away-step FW ("AFW"), pairwise-step
-FW ("PFW") or the lazified version of AFW ("Lazy").
 
-2 --> typeStep: Specifies the type of step. Choosing "EL" performs exact line search
-for the quadratic objective functions. Otherwise choosing "SS" chooses a step
-that minimizes the smoothness equation and ensures progress in every iteration.
+def runSVRCG(
+    x0,
+    function,
+    feasibleReg,
+    tolerance,
+    maxTime,
+    locOpt,
+    criterion="PG",
+    criterionRef=0.0,
+):
+    """
+    Run SVRFW
 
-3 --> criterion: Specify if the terminating criterion is the primal gap ("PG") or the
-dual gap ("DG"). If anything else is specified will run for a given number of iterations.
-
-4 --> criterionRef: Value to which the algorithm will run, according to the criterion choosen.
-
-5 --> returnVar: If a value is specified will return the active set and the 
-barycentric coordinates.
-"""
-def runFW(x0, activeSet, lambdas, function, feasibleReg, tolerance, maxTime, locOpt, FWVariant = "AFW", typeStep = "SS", criterion = "PG", criterionRef = 0.0, returnVar = None):
-    #Quantities we want to output.
+    Parameters
+    ----------
+    x0 : numpy array.
+        Initial point.
+    function: function being minimized
+        Function that we will minimize.
+    feasibleReg : feasible region function.
+        Returns LP oracles over feasible region.
+    tolerance : float
+        Tolerance to which we solve problem.
+    maxTime : float
+        Maximum number of seconds the algorithm is run.
+    locOpt : numpy array
+        Location of the optimal value (to keep track of distance to optimum)
+    criterion : str
+        Criterion for stopping: Dual gap or primal gap (DG, PG)
+    criterionRef : float
+        Value of the function evaluated at the optimum.
+        
+    Returns
+    -------
+    x
+        Output point
+    FWGap
+        List containing FW gap for points along the run.
+    fVal
+        List containing primal gap for points along the run.
+    timing
+        List containing timing for points along the run.
+    distance
+        List containing distance to optimum for points along the run.
+        
+    """
+    # Quantities we want to output.
     grad = function.fEvalGrad(x0)
     FWGap = [np.dot(grad, x0 - feasibleReg.LPOracle(grad))]
     fVal = [function.fEval(x0)]
     timing = [time.time()]
-    xVal = [np.linalg.norm(x0 - locOpt)]
-    activeSize = [1]
+    distance = [np.linalg.norm(x0 - locOpt)]
+    iteration = [1]
+    x = x0.copy()
+    itCount_t = 1
+    while True:
+        N_t = int(math.ceil(np.power(2, itCount_t + 3) - 2))
+        snapShot = function.fEvalGrad(x)
+        snapPoint = x.copy()
+        for k in range(0, N_t):
+            m_k = int(math.ceil(96.0 * (k + 2)))
+            StochGrad = function.fEvalGradStoch(x, snapShot, snapPoint, m_k)
+            v = feasibleReg.LPOracle(StochGrad)
+            gamma_k = 2.0 / (k + 2)
+            x = x + gamma_k * (v - x)
+            if (
+                exitCriterion(
+                    itCount_t,
+                    fVal[-1],
+                    FWGap[-1],
+                    criterion=criterion,
+                    numCriterion=tolerance,
+                    critRef=criterionRef,
+                )
+                or timing[-1] - timing[0] > maxTime
+            ):
+                timing[:] = [t - timing[0] for t in timing]
+                return "SVRCG", x, FWGap, fVal, timing, distance, iteration
+        grad = function.fEvalGrad(x)
+        itCount_t += 1
+        iteration.append(itCount_t)
+        performUpdate(
+            function,
+            x,
+            FWGap,
+            fVal,
+            timing,
+            np.dot(grad, x - feasibleReg.LPOracle(grad)),
+        )
+        distance.append(np.linalg.norm(x - locOpt))
+        if (
+            exitCriterion(
+                itCount_t,
+                fVal[-1],
+                FWGap[-1],
+                criterion=criterion,
+                numCriterion=tolerance,
+                critRef=criterionRef,
+            )
+            or timing[-1] - timing[0] > maxTime
+        ):
+            timing[:] = [t - timing[0] for t in timing]
+            return "SVRCG", x, FWGap, fVal, timing, distance, iteration
+
+
+def runCG(
+    x0,
+    activeSet,
+    lambdas,
+    function,
+    feasibleReg,
+    tolerance,
+    maxTime,
+    locOpt,
+    FWVariant="ACG",
+    typeStep="EL",
+    criterion="PG",
+    criterionRef=0.0,
+    returnVar=None,
+    maxIter=None,
+):
+    """
+    Run CG Variant.
+
+    Parameters
+    ----------
+    x0 : numpy array.
+        Initial point.
+    activeSet : list of numpy arrays.
+        Initial active set.
+    lambdas : list of floats.
+        Initial barycentric coordinates.
+    function: function being minimized
+        Function that we will minimize.
+    feasibleReg : feasible region function.
+        Returns LP oracles over feasible region.
+    tolerance : float
+        Tolerance to which we solve problem.
+    maxTime : float
+        Maximum number of seconds the algorithm is run.
+    locOpt : numpy array
+        Location of the optimal value (to keep track of distance to optimum)
+    FWVariant : str
+        Variant used to minimize function. (AFW, PFW, Vanilla, Lazy)
+    typeStep : str
+        Type of step used (EL, SS)
+    criterion : str
+        Criterion for stopping: Dual gap or primal gap (DG, PG)
+    criterionRef : float
+        Value of the function evaluated at the optimum.
+   returnVar : Bool
+        If function returns active set and lambda
+   maxIter : int
+        Maximum number of iterations run.      
+        
+    Returns
+    -------
+    x
+        Output point
+    FWGap
+        List containing FW gap for points along the run.
+    fVal
+        List containing primal gap for points along the run.
+    timing
+        List containing timing for points along the run.
+    lambdaVal
+        List barycentric coordinates of final point
+    active
+        List containing numpy arrays with vertices in actice set.
+    distance
+        List containing distance to optimum for points along the run.
+        
+    """
+    # Quantities we want to output.
+    grad = function.fEvalGrad(x0)
+    FWGap = [np.dot(grad, x0 - feasibleReg.LPOracle(grad))]
+    fVal = [function.fEval(x0)]
+    timing = [time.time()]
+    distance = [np.linalg.norm(x0 - locOpt)]
+    iteration = [1]
     x = x0.copy()
     active = activeSet.copy()
     lambdaVal = lambdas.copy()
     itCount = 1
-    if(FWVariant == "Lazy"):
+    if FWVariant == "LazyACG":
         phiVal = [FWGap[-1]]
-    while(True):
-        if(FWVariant == "AFW"):
-            x, vertvar, gap = awayStepFW(function, feasibleReg, x, active, lambdaVal, typeStep)
+    while True:
+        if FWVariant == "ACG":
+            x, gap = awayStepFW(function, feasibleReg, x, active, lambdaVal, typeStep)
         else:
-            if(FWVariant == "PFW"):
-                x, vertvar, gap = pairwiseStepFW(function, feasibleReg, x, active, lambdaVal, typeStep)
-            if(FWVariant == "Lazy"):
-                x, vertvar, gap = awayStepFWLazy(function, feasibleReg, x, active, lambdaVal, phiVal, typeStep)
-            if(FWVariant == "Vanilla"):
-                x, vertvar, gap = stepFW(function, feasibleReg, x, active, lambdaVal, typeStep)
-        activeSize.append(len(active))
-        performUpdate(function, x, FWGap, fVal, timing, gap)
-        xVal.append(np.linalg.norm(x - locOpt))
-        if(exitCriterion(itCount, fVal[-1], FWGap[-1], criterion = criterion, numCriterion = tolerance, critRef = criterionRef) or timing[-1] - timing[0] > maxTime):
-            timing[:] = [t - timing[0] for t in timing]
-            if(returnVar is not None):
-                return x, FWGap, fVal, timing, lambdaVal[:], active[:], xVal
-            else:
-                return x, FWGap, fVal, timing, activeSize, xVal
+            if FWVariant == "PCG":
+                x, gap = pairwiseStepFW(
+                    function, feasibleReg, x, active, lambdaVal, typeStep
+                )
+            if FWVariant == "LazyACG":
+                x, gap = awayStepFWLazy(
+                    function, feasibleReg, x, active, lambdaVal, phiVal, typeStep
+                )
+            if FWVariant == "CG":
+                x, gap = stepFW(function, feasibleReg, x, active, lambdaVal, typeStep)
         itCount += 1
+        performUpdate(function, x, FWGap, fVal, timing, gap)
+        iteration.append(itCount)
+        distance.append(np.linalg.norm(x - locOpt))
+        if (
+            exitCriterion(
+                itCount,
+                fVal[-1],
+                FWGap[-1],
+                criterion=criterion,
+                numCriterion=tolerance,
+                critRef=criterionRef,
+            )
+            or timing[-1] - timing[0] > maxTime
+        ):
+            timing[:] = [t - timing[0] for t in timing]
+            if returnVar is not None:
+                return (
+                    FWVariant,
+                    x,
+                    FWGap,
+                    fVal,
+                    timing,
+                    lambdaVal[:],
+                    active[:],
+                    distance,
+                    iteration,
+                )
+            else:
+                return FWVariant, x, FWGap, fVal, timing, distance, iteration
+        if maxIter is not None:
+            if itCount > maxIter:
+                timing[:] = [t - timing[0] for t in timing]
+                if returnVar is not None:
+                    return (
+                        FWVariant,
+                        x,
+                        FWGap,
+                        fVal,
+                        timing,
+                        lambdaVal[:],
+                        active[:],
+                        distance,
+                        iteration,
+                    )
+                else:
+                    return FWVariant, x, FWGap, fVal, timing, distance, iteration
 
-#Takes a random PSD matrix generated by the functions above and uses them as a function.
-class QuadApprox:
-    import numpy as np
-    def __init__(self, hessian, gradient, xk):
-        self.H = hessian.copy()
-        self.g = gradient.copy()
-        self.x_k = xk.copy()
-        self.alpha = 1.0
-        return       
-           
-    #Evaluate function.
-    def fEval(self, x):
-        return np.dot(self.g, x  - self.x_k) + 0.5/self.alpha*np.dot(x - self.x_k, self.H.dot(x - self.x_k))
-    
-    #Evaluate gradient.
-    def fEvalGrad(self, x):
-        return self.g + self.H.dot(x - self.x_k)/self.alpha
-    
-    #Line Search.
-    def lineSearch(self, grad, d, x):
-        return -np.dot(grad, d)/np.dot(d, self.H.dot(d))
-    
-    #Update Hessian matrix.
-    def updateHessian(self, hessian):
-        self.H = hessian.copy()
-        return
-    
-    #Update gradient vector
-    def updateGradient(self, gradient):
-        self.g = gradient.copy()
-        return
-    
-    #Update point.
-    def updatePoint(self, xk):
-        self.x_k = xk.copy()
-        return
-    
-    #Is the approximation linear.
-    def isLinear(self):
-        return False
-    
-#Creates a compact Hessian Approximation.
-#m is the number of elements we'll use to calculate the matrix.
-class QuadApproxInexactHessianLBFGS:
-    import numpy as np
-    def __init__(self, dimension, m, gradient, xk):
-        self.dim = dimension
-        self.m = m
-        self.g = gradient.copy()
-        self.x_k = xk.copy()
-        self.left = None
-        self.center = None
-        self.S = None
-        self.Y = None
-        self.delta = None
-        self.I = sparse.eye(dimension)
-        self.L = 1.0
-        self.Mu = 1.0
-        return       
-          
-    #Update the function
-    def updateRepresentation(self, s, y):
-        if(self.S is None and self.Y is None):
-            self.S = s.copy().reshape(self.dim,1)
-            self.Y = y.copy().reshape(self.dim,1)
-        else:
-            self.S = np.hstack((self.S, s.reshape(self.dim, 1)))
-            self.Y = np.hstack((self.Y, y.reshape(self.dim, 1)))
-        self.delta = np.dot(y, y)/np.dot(s, y)
-        if(self.delta <= 0.0):
-            print("The direction was not a descent direction.")
-            quit()
-        #Need to delete the first element in the matrix.  
-        if(self.S.shape[1] >= self.m):
-            self.S = np.delete(self.S, 0, 1)
-            self.Y = np.delete(self.Y, 0, 1)
-        self.left = np.hstack((self.delta*self.S, self.Y))
-        #Build the L matrix.
-        L = np.tril(np.matmul(self.S.T, self.Y), -1)
-        N = self.S.shape[1]
-        D = np.zeros((N, N))
-        for i in range(N):
-            D[i, i] = np.dot(self.S[:, i], self.Y[:, i])
-        self.center = np.linalg.pinv(np.block([[self.delta*np.matmul(self.S.T, self.S), L], [L.T, -D]]))
-#        hessian = self.delta*np.identity(self.dim) - np.matmul(np.matmul(self.left, self.center), self.left.T)
-#        #Estimate the local L-smoothness.
-#        w,v = eigsh(hessian, 1, which = 'LA', maxiter = 10000000)
-#        self.L = np.max(np.real(w))
-#        #Estimate the local strong convexity.
-#        w,v = eigsh(hessian, 1, which = 'SA', maxiter = 10000000)
-#        self.Mu = np.min(np.real(w))
-        return
 
-    #Evaluate function.
-    def fEval(self, x):
-        if(self.S is not None):
-            aux1 = np.dot(x - self.x_k, self.left)
-            aux =  0.5*self.delta*np.dot(x - self.x_k, x - self.x_k) - 0.5*np.dot(np.dot(aux1, self.center), aux1)
-            return np.dot(self.g, x  - self.x_k) + aux
-        else:
-            return np.dot(self.g, x  - self.x_k) 
-    
-    #Evaluate gradient.
-    def fEvalGrad(self, x):
-        if(self.S is not None):
-            return self.g + self.delta*(x - self.x_k) - np.dot(np.dot(self.left, self.center), np.dot(x - self.x_k, self.left))
-        else:
-            return self.g 
-    
-    #Line Search.
-    def lineSearch(self, grad, d, x):
-        if(self.S is not None):
-            aux1 = np.dot(d, self.left)
-            aux = self.delta*np.dot(d, d) - np.dot(np.dot(aux1, self.center), aux1)
-            return -np.dot(grad, d)/aux
-        else:
-            return 100000.0
-    
-    #Update gradient vector
-    def updateGradient(self, gradient):
-        self.g = gradient.copy()
-        return
-    
-    #Update point.
-    def updatePoint(self, xk):
-        self.x_k = xk.copy()
-        return
-    
-    #Is the approximation linear.
-    def isLinear(self):
-        return self.S is None
-    
-    def largestEig(self):
-        if(self.S is not None):
-#            return self.L
-            return 1.0
-        else:
-            return 1.0
+def SOCGS(
+    x0,
+    activeSet,
+    lambdas,
+    function,
+    QuadFunApprox,
+    feasibleReg,
+    tolerance,
+    maxTime,
+    locOpt,
+    criterion="PG",
+    criterionRef=0.0,
+    TypeSolver="LazyACG",
+    updateHessian=True,
+    maxIter=100,
+    omega=0.0,
+):
+    """
+    Run SOCGS
 
-    def smallestEig(self):
-        if(self.S is not None):
-#            return self.Mu
-            return 1.0
-        else:
-            return 1.0
-    
-#Creates a compact Hessian Approximation.
-#m is the number of elements we'll use to calculate the matrix.
-class QuadApproxInexactHessianBFGS:
-    import numpy as np
-    def __init__(self, dimension, gradient, xk):
-        self.dim = dimension
-        self.g = gradient.copy()
-        self.x_k = xk.copy()
-        self.Hessian = None
-        self.L = 1.0
-        self.Mu = 1.0
-        return       
-          
-    #Update the function
-    def updateRepresentation(self, s, y):
-        if(np.dot(s, y) <= 0.0):
-            print("The direction was not a descent direction.")
-            quit()
-        if self.Hessian is None:
-            self.Hessian = np.dot(y,y)/np.dot(s,y)*np.identity(self.dim)
-        else:
-            self.Hessian = self.Hessian - np.outer(np.dot(self.Hessian, s), np.dot(s.T, self.Hessian))/np.dot(s.T, np.dot(self.Hessian, s)) + np.outer(y,y)/np.dot(s,y)
-#        w, v = np.linalg.eig(self.Hessian)
-#        print("Minimum Eigenvalues: " + str(np.min(np.real(w))))
-#        print("Maximum Eigenvalues: " + str(np.max(np.real(w))))
-#        self.Mu = np.min(np.real(w))
-#        self.L = np.max(np.real(w)) 
-        return
-
-    #Evaluate function.
-    def fEval(self, x):
-        if self.Hessian is None:
-            return np.dot(self.g, x - self.x_k)
-        else:
-            return np.dot(self.g, x - self.x_k) + 0.5*np.dot(x - self.x_k, np.dot(self.Hessian, x - self.x_k))
-    
-    #Evaluate gradient.
-    def fEvalGrad(self, x):
-        if self.Hessian is None:
-            return self.g
-        else:
-            return self.g + np.dot(self.Hessian, x - self.x_k)
-    
-    #Line Search.
-    def lineSearch(self, grad, d, x):
-        if self.Hessian is None:
-            return 100000.0
-        else:
-            return -np.dot(grad, d)/np.dot(d, np.dot(self.Hessian, d))
-    
-    #Update gradient vector
-    def updateGradient(self, gradient):
-        self.g = gradient.copy()
-        return
-    
-    #Update point.
-    def updatePoint(self, xk):
-        self.x_k = xk.copy()
-        return
-    
-    def greatestEig(self):
-        return self.L
-
-    def smallestEig(self):
-        return self.Mu
-    
-    
-#Projected Newton method with AFW to solve the subproblems.     
-def runProjectedNewton(x0, activeSet, lambdas, function, feasibleReg, tolerance, maxTime, locOpt, criterion = "PG", criterionRef = 0.0, Hessian = "Exact", ExactLinesearch = True, TypeSolver = "Lazy", forcingParam = None, useDual = None, HessianParam = None):
-    #Quantities we want to output.
+    Parameters
+    ----------
+    x0 : numpy array.
+        Initial point.
+    activeSet : list of numpy arrays.
+        Initial active set.
+    lambdas : list of floats.
+        Initial barycentric coordinates.
+    function: function being minimized
+        Function that we will minimize.
+    QuadFunApprox: quadratic function.
+        Quadratic function that will be used in the PVM steps.
+    feasibleReg : feasible region function.
+        Returns LP oracles over feasible region.
+    tolerance : float
+        Tolerance to which we solve problem.
+    maxTime : float
+        Maximum number of seconds the algorithm is run.
+    locOpt : numpy array
+        Location of the optimal value (to keep track of distance to optimum)
+    criterion : str
+        Criterion for stopping: Dual gap or primal gap (DG, PG)
+    criterionRef : float
+        Value of the function evaluated at the optimum.
+    TypeSolver : str
+        Variant used to minimize function. (AFW, PFW, Vanilla, Lazy, DICG)
+    updateHessian : bool
+        If the quadratic approximation explicitly requires updating Hessian.
+   maxIter : int
+        Maximum number of inner iterations used per outer iteration.
+   omega : float
+        Value of omega when returning inexact Hessian.
+   
+        
+    Returns
+    -------
+    x
+        Output point
+    FWGap
+        List containing FW gap for points along the run.
+    fVal
+        List containing primal gap for points along the run.
+    timing
+        List containing timing for points along the run.
+    lambdaVal
+        List barycentric coordinates of final point
+    active
+        List containing numpy arrays with vertices in actice set.
+    distance
+        List containing distance to optimum for points along the run.
+        
+    """
+    # Quantities we want to output.
     grad = function.fEvalGrad(x0)
     FWGap = [np.dot(grad, x0 - feasibleReg.LPOracle(grad))]
     fVal = [function.fEval(x0)]
     timing = [time.time()]
-    xVal = [np.linalg.norm(x0 - locOpt)]
-    activeSize = [1]
+    distance = [np.linalg.norm(x0 - locOpt)]
+    iteration = [1]
+    # Initialize SOCGS iterates
     x = x0.copy()
-    activeProj  = activeSet.copy()
-    lambdaValProj = lambdas.copy()
-    proj = x0.copy()
-    itCount = 1
-    #Create the quadratic function we'll keep updating.
-    if(Hessian == "Exact"):
-        #Use exact Hessian
-        fun = QuadApprox(function.returnM(), grad, x)
+    activeSet = activeSet.copy()
+    lambdaVal = lambdas.copy()
+    # Initialize PVM iterates
+    xPVM = x0.copy()
+    activeSetPVM = activeSet.copy()
+    lambdaValPVM = lambdas.copy()
+    # Initialize CG iterate
+    xCG = x0.copy()
+    activeSetCG = activeSet.copy()
+    lambdaValCG = lambdas.copy()
+    # Create the approximate quadratic function
+    if updateHessian:
+        QuadFunApprox.updateApprox(
+            grad, x, function.returnM(x, omega, distance[-1] ** 2)
+        )
     else:
-        if(Hessian == "LBFGS"):
-            if(HessianParam is not None):
-                fun = QuadApproxInexactHessianLBFGS(len(x0), HessianParam, grad, x)
-            else:
-                fun = QuadApproxInexactHessianLBFGS(len(x0), 20, grad, x)
-        if(Hessian == "BFGS"):
-            fun = QuadApproxInexactHessianBFGS(len(x0), grad, x)
-    subprobTol = FWGap[-1]
-    while(True):
-        if(forcingParam is not None):
-            #Use forcing sequence for the errors to go to zero.
-            forcing = forcingParam
-            subprobTol *= forcing
-            subprobTol = max(tolerance, subprobTol)
+        QuadFunApprox.updateApprox(grad, x)
+    # Used for the Lazy AFW algorithm.
+    phiVal = [FWGap[-1]]
+    itCount = 0
+    while True:
+        # Compute Projected Variable Metric step
+        subprobTol = max(
+            tolerance, ((fVal[-1] - criterionRef) / np.linalg.norm(grad)) ** 4
+        )
+        if TypeSolver == "DICG":
+            _, xPVM, _, _, _, _, _ = DIPFW(
+                x,
+                QuadFunApprox,
+                feasibleReg,
+                subprobTol,
+                maxTime,
+                np.zeros(len(x)),
+                typeStep="EL",
+                criterion="DG",
+                maxIter=maxIter,
+            )
+            xCG, _, _ = stepDICG(function, feasibleReg, xCG, "EL")
         else:
-            if(useDual is not None):
-                #Use the FW Gap to drive convergence.
-                subprobTol = max(tolerance, (FWGap[-1]/np.linalg.norm(grad))**2)
-            else:
-                #Original subproblem tolerance.
-                eta = function.smallestEig()/np.sqrt(2*function.largestEig())
-                subprobTol = max(tolerance, (eta*(fVal[-1] - criterionRef)/np.linalg.norm(grad))**2)          
-        
-        #Solve the subproblems to a given accuracy.
-        if(TypeSolver == "DICG"):
-            proj, gapSub, fValSub, timingSub, distanceSub = DIPFW(proj, fun, feasibleReg, subprobTol, maxTime, np.zeros(len(x)), typeStep = "EL", criterion = "DG")
+            _, xPVM, _, _, _, lambdaValPVM[:], activeSetPVM[:], _, _ = runCG(
+                x,
+                activeSet,
+                lambdaVal,
+                QuadFunApprox,
+                feasibleReg,
+                subprobTol,
+                maxTime,
+                np.zeros(len(x)),
+                FWVariant=TypeSolver,
+                typeStep="EL",
+                criterion="DG",
+                returnVar=True,
+                maxIter=maxIter,
+            )
+            if TypeSolver == "LazyACG":
+                xCG, _ = awayStepFWLazy(
+                    function, feasibleReg, xCG, activeSetCG, lambdaValCG, phiVal, "EL"
+                )
+            if TypeSolver == "PCG":
+                xCG, _ = pairwiseStepFW(
+                    function, feasibleReg, xCG, activeSetCG, lambdaValCG, "EL"
+                )
+            if TypeSolver == "CG":
+                xCG, _ = stepFW(
+                    function, feasibleReg, xCG, activeSetCG, lambdaValCG, "EL"
+                )
+            if TypeSolver == "ACG":
+                xCG, _ = awayStepFW(
+                    function, feasibleReg, xCG, activeSetCG, lambdaValCG, "EL"
+                )
+        if function.fEval(xCG) <= function.fEval(xPVM):
+            x = xCG.copy()
+            activeSet = activeSetCG.copy()
+            lambdaVal = lambdaValCG.copy()
         else:
-            proj, gapSub, fValSub, timingSub, lambdaValProj, activeProj, distanceSub  = runFW(proj, activeProj, lambdaValProj, fun, feasibleReg, subprobTol, maxTime, np.zeros(len(x)), FWVariant = TypeSolver, typeStep = "EL", criterion = "DG", returnVar = True)
-        #Choose which step to take.
-        alpha = min(1.0, function.lineSearch(grad, proj - x, x))
-        xOld = x.copy()
-        x += alpha*(proj - x)
-        gradOld = grad.copy()
+            x = xPVM.copy()
+            activeSet = activeSetPVM.copy()
+            lambdaVal = lambdaValPVM.copy()
         grad = function.fEvalGrad(x)
-        performUpdate(function, x, FWGap, fVal, timing, np.dot(grad, x - feasibleReg.LPOracle(grad)))
-        xVal.append(np.linalg.norm(x - locOpt))
-        if(exitCriterion(itCount, fVal[-1], FWGap[-1], criterion = criterion, numCriterion = tolerance, critRef = criterionRef) or timing[-1] - timing[0] > maxTime):
-            timing[:] = [t - timing[0] for t in timing]
-            return x, FWGap, fVal, timing, activeSize, xVal
         itCount += 1
-        #Update the function
-        fun.updateGradient(grad)
-        fun.updatePoint(x)
-        #Update the inexact quadratic
-        if(Hessian != "Exact"):
-            fun.updateRepresentation(x - xOld, grad - gradOld)
+        iteration.append(itCount)
+        performUpdate(
+            function,
+            x,
+            FWGap,
+            fVal,
+            timing,
+            np.dot(grad, x - feasibleReg.LPOracle(grad)),
+        )
+        distance.append(np.linalg.norm(x - locOpt))
+        # Check the exit criterion.
+        if (
+            exitCriterion(
+                itCount,
+                fVal[-1],
+                FWGap[-1],
+                criterion=criterion,
+                numCriterion=tolerance,
+                critRef=criterionRef,
+            )
+            or timing[-1] - timing[0] > maxTime
+        ):
+            timing[:] = [t - timing[0] for t in timing]
+            return "SOCGS", x, FWGap, fVal, timing, distance, iteration
 
-#Perform one step of the AFW algorithm
-#Also specifies if the number of vertices has decreased var = -1 or
-#if it has increased var = +1. Otherwise 0.      
+        # Update the approximation.
+        if updateHessian:
+            QuadFunApprox.updateApprox(
+                grad, x, function.returnM(x, omega, distance[-1] ** 2)
+            )
+        else:
+            QuadFunApprox.updateApprox(grad, x)
+
+
+class NCG:
+    """
+    Run NCG
+
+    Parameters
+    ----------
+    x0 : numpy array.
+        Initial point.
+    activeSet : list of numpy arrays.
+        Initial active set.
+    lambdas : list of floats.
+        Initial barycentric coordinates.
+    function: function being minimized
+        Function that we will minimize.
+    QuadFunApprox: quadratic function.
+        Quadratic function that will be used in the PVM steps.
+    feasibleReg : feasible region function.
+        Returns LP oracles over feasible region.
+    tolerance : float
+        Tolerance to which we solve problem.
+    maxTime : float
+        Maximum number of seconds the algorithm is run.
+    locOpt : numpy array
+        Location of the optimal value (to keep track of distance to optimum)
+    criterion : str
+        Criterion for stopping: Dual gap or primal gap (DG, PG)
+    criterionRef : float
+        Value of the function evaluated at the optimum.
+    TypeSolver : str
+        Variant used to minimize function. (AFW, PFW, Vanilla, Lazy, DICG)
+    updateHessian : bool
+        If the quadratic approximation explicitly requires updating Hessian.
+   maxIter : int
+        Maximum number of inner iterations used per outer iteration.
+   
+    Returns
+    -------
+    x
+        Output point
+    FWGap
+        List containing FW gap for points along the run.
+    fVal
+        List containing primal gap for points along the run.
+    timing
+        List containing timing for points along the run.
+    lambdaVal
+        List barycentric coordinates of final point
+    active
+        List containing numpy arrays with vertices in actice set.
+    distance
+        List containing distance to optimum for points along the run.
+        
+    """
+
+    def __init__(self, sigma, beta, C):
+        self.sigma = sigma
+        self.beta = beta
+        self.C = C
+        # Verify that we satisfy the conditions.
+        assert (
+            1 / (C * (1 - beta)) + beta / ((1 - 2 * beta) * (1 - beta) ** 2) <= sigma
+        ), "First condition not satisfied."
+        assert 1 / C + 1 / (1 - 2 * beta) <= 2, "Second condition not satisfied."
+        return
+
+    def run(
+        self,
+        x0,
+        activeSet,
+        lambdas,
+        function,
+        QuadFunApprox,
+        feasibleReg,
+        tolerance,
+        maxTime,
+        locOpt,
+        criterion="PG",
+        criterionRef=0.0,
+        TypeSolver="Vanilla",
+        updateHessian=True,
+        maxIter=100,
+    ):
+        # Quantities we want to output.
+        grad = function.fEvalGrad(x0)
+        FWGap = [np.dot(grad, x0 - feasibleReg.LPOracle(grad))]
+        fVal = [function.fEval(x0)]
+        timing = [time.time()]
+        distance = [np.linalg.norm(x0 - locOpt)]
+        iteration = [1]
+        x = x0.copy()
+        activeSet = activeSet.copy()
+        lambdasValues = lambdas.copy()
+        itCount = 1.0
+        C_1 = 0.25
+        delta = 0.99
+        lambdaVal = self.beta / self.sigma
+        hValBeta = (
+            self.beta
+            * (1 - 2.0 * self.beta + 2.0 * self.beta ** 2)
+            / ((1 - 2.0 * self.beta) * (1 - self.beta) ** 2 - self.beta ** 2)
+        )
+        etaVal = min(self.beta / self.C, C_1 / hValBeta)
+        if updateHessian:
+            QuadFunApprox.updateApprox(grad, x, function.returnM(x))
+        else:
+            QuadFunApprox.updateApprox(grad, x)
+        while True:
+            if TypeSolver == "CG":
+                _, z, _, _, _, _, _ = runCG(
+                    x,
+                    activeSet,
+                    lambdasValues,
+                    QuadFunApprox,
+                    feasibleReg,
+                    etaVal ** 2,
+                    maxTime,
+                    np.zeros(len(x)),
+                    FWVariant="CG",
+                    typeStep="EL",
+                    criterion="DG",
+                    maxIter=maxIter,
+                )
+            else:
+                _, z, _, _, _, _, _ = DIPFW(
+                    x,
+                    QuadFunApprox,
+                    feasibleReg,
+                    etaVal ** 2,
+                    maxTime,
+                    np.zeros(len(x)),
+                    typeStep="EL",
+                    criterion="DG",
+                    maxIter=maxIter,
+                )
+            d = z - x
+            gamma = QuadFunApprox.fEvalHessianNorm(d)
+
+            # Take a full step.
+            if gamma + etaVal <= 1 / hValBeta or lambdaVal <= self.beta:
+                lambdaVal = self.sigma * lambdaVal
+                etaVal = self.sigma * etaVal
+                alpha = 1.0
+                x = x + alpha * d
+            else:
+                alpha = min(
+                    delta
+                    * (gamma ** 2 - etaVal ** 2)
+                    / (gamma ** 3 + gamma ** 2 - gamma * etaVal ** 2),
+                    1.0,
+                )
+                x = x + alpha * d
+            grad = function.fEvalGrad(x)
+            itCount += 1
+            iteration.append(itCount)
+            performUpdate(
+                function,
+                x,
+                FWGap,
+                fVal,
+                timing,
+                np.dot(grad, x - feasibleReg.LPOracle(grad)),
+            )
+            distance.append(np.linalg.norm(x - locOpt))
+            if (
+                exitCriterion(
+                    itCount,
+                    fVal[-1],
+                    FWGap[-1],
+                    criterion=criterion,
+                    numCriterion=tolerance,
+                    critRef=criterionRef,
+                )
+                or timing[-1] - timing[0] > maxTime
+            ):
+                timing[:] = [t - timing[0] for t in timing]
+                return "NCG", x, FWGap, fVal, timing, distance, iteration
+            if updateHessian:
+                QuadFunApprox.updateApprox(grad, x, function.returnM(x))
+            else:
+                QuadFunApprox.updateApprox(grad, x)
+
+
+def DIPFW(
+    x0,
+    function,
+    feasibleReg,
+    tolerance,
+    maxTime,
+    locOpt,
+    typeStep="EL",
+    criterion="PG",
+    criterionRef=0.0,
+    maxIter=None,
+):
+    """
+    Run DIPFW for 0-1 polytopes.
+
+    Parameters
+    ----------
+    x0 : numpy array.
+        Initial point.
+    function: function being minimized
+        Function that we will minimize.
+    feasibleReg : feasible region function.
+        Returns LP oracles over feasible region.
+    tolerance : float
+        Tolerance to which we solve problem.
+    maxTime : float
+        Maximum number of seconds the algorithm is run.
+    locOpt : numpy array
+        Location of the optimal value (to keep track of distance to optimum)
+    typeStep : str
+        Type of step size used.
+    criterion : str
+        Criterion for stopping: Dual gap or primal gap (DG, PG)
+    criterionRef : float
+        Value of the function evaluated at the optimum.
+   maxIter : int
+        Maximum number of inner iterations used per outer iteration.
+   
+    Returns
+    -------
+    x
+        Output point
+    FWGap
+        List containing FW gap for points along the run.
+    fVal
+        List containing primal gap for points along the run.
+    timing
+        List containing timing for points along the run.
+    lambdaVal
+        List barycentric coordinates of final point
+    active
+        List containing numpy arrays with vertices in actice set.
+    distance
+        List containing distance to optimum for points along the run.
+        
+    """
+    x = x0.copy()
+    FWGap, fVal, timing, distance, iteration = ([] for i in range(5))
+    itCount = 1
+    timeRef = time.time()
+    while True:
+        x, xOld, oldGap = stepDICG(function, feasibleReg, x, typeStep)
+        distance.append(np.linalg.norm(xOld - locOpt))
+        performUpdate(function, xOld, FWGap, fVal, timing, oldGap)
+        iteration.append(itCount)
+        itCount += 1
+        if (
+            exitCriterion(
+                itCount,
+                fVal[-1],
+                FWGap[-1],
+                criterion=criterion,
+                numCriterion=tolerance,
+                critRef=criterionRef,
+            )
+            or timing[-1] - timeRef > maxTime
+        ):
+            distance.append(np.linalg.norm(x - locOpt))
+            grad = function.fEvalGrad(x)
+            performUpdate(
+                function,
+                x,
+                FWGap,
+                fVal,
+                timing,
+                np.dot(grad, x - feasibleReg.LPOracle(grad)),
+            )
+            iteration.append(itCount)
+            timing[:] = [t - timeRef for t in timing]
+            return "DICG", x, FWGap, fVal, timing, distance, iteration
+        if maxIter is not None:
+            if itCount > maxIter:
+                distance.append(np.linalg.norm(x - locOpt))
+                grad = function.fEvalGrad(x)
+                performUpdate(
+                    function,
+                    x,
+                    FWGap,
+                    fVal,
+                    timing,
+                    np.dot(grad, x - feasibleReg.LPOracle(grad)),
+                )
+                iteration.append(itCount)
+                timing[:] = [t - timeRef for t in timing]
+                return "DICG", x, FWGap, fVal, timing, distance, iteration
+
+
+def stepDICG(function, feasibleReg, x, typeStep):
+    """
+    Performs a single step of the DICG/DIPFW algorithm.
+
+    Parameters
+    ----------
+    function: function being minimized
+        Function that we will minimize.
+    feasibleReg : feasible region function.
+        Returns LP oracles over feasible region.
+    x : numpy array.
+        Point.
+    typeStep : str
+        Type of step size used.
+   
+    Returns
+    -------
+    x + alpha*d
+        Output point
+    x
+        Input point
+    oldGap
+        FW gap at initial point.
+        
+    """
+    grad = function.fEvalGrad(x)
+    v = feasibleReg.LPOracle(grad)
+    oldGap = np.dot(grad, x - v)
+    gradAux = grad.copy()
+    for i in range(len(gradAux)):
+        if x[i] == 0.0:
+            gradAux[i] = -1.0e15
+    a = feasibleReg.LPOracle(-gradAux)
+    # Find the weight of the extreme point a in the decomposition.
+    d = v - a
+    alphaMax = calculateStepsize(x, d)
+    optStep = stepSizeDI(function, feasibleReg, 1, d, grad, x, typeStep)
+    alpha = min(optStep, alphaMax)
+    return x + alpha * d, x, oldGap
+
+
 def awayStepFW(function, feasibleReg, x, activeSet, lambdas, typeStep):
+    """
+    Performs a single step of the ACG/AFW algorithm.
+
+    Parameters
+    ----------
+    function: function being minimized
+        Function that we will minimize.
+    feasibleReg : feasible region function.
+        Returns LP oracles over feasible region.
+    x : numpy array.
+        Point.
+    activeSet : list of numpy arrays.
+        Initial active set.
+    lambdas : list of floats.
+        Initial barycentric coordinates.
+    typeStep : str
+        Type of step size used.
+   
+    Returns
+    -------
+    x + alpha*d
+        Output point
+    FWGap
+        FW gap at initial point.
+        
+    """
     grad = function.fEvalGrad(x)
     v = feasibleReg.LPOracle(grad)
     a, indexMax = feasibleReg.AwayOracle(grad, activeSet)
-    vertvar = 0
-    #Choose FW direction, can overwrite index.
+    # Choose FW direction, can overwrite index.
     FWGap = np.dot(grad, x - v)
-    if(FWGap == 0.0):
-        return x , vertvar, FWGap
-    if(FWGap > np.dot(grad, a - x)):
-      d = v - x
-      alphaMax = 1.0
-      optStep = stepSize(function, d, grad, x, typeStep)
-      alpha = min(optStep, alphaMax)
-      
-      if(function.fEval(x + alpha*d) > function.fEval(x)):
-          options={'xatol': 1e-12, 'maxiter': 500000, 'disp': 0}
-          def InnerFunction(t):  # Hidden from outer code
-              return function.fEval(x + t*d)
-          res = minimize_scalar(InnerFunction, bounds=(0, alphaMax), method='bounded', options = options)
-          alpha = min(res.x, alphaMax)
-            
-      
-      if(alpha != alphaMax):
-          #newVertex returns true if vertex is new.
-          flag, index = newVertexFailFast(v, activeSet)
-          lambdas[:] = [i * (1 - alpha) for i in lambdas]
-          if(flag):
-              activeSet.append(v)
-              lambdas.append(alpha)
-              vertvar = 1
-          else:
-              #Update existing weights
-              lambdas[index] += alpha
-      #Max step length away step, only one vertex now.
-      else:
-          activeSet[:] = [v]
-          lambdas[:] = [alphaMax]
-          vertvar = -1
-    else:
-      d = x - a
-      alphaMax = lambdas[indexMax]/(1.0 - lambdas[indexMax])
-      optStep = stepSize(function, d, grad, x, typeStep, maxStep = alphaMax)
-      alpha = min(optStep, alphaMax)
-      
-      if(function.fEval(x + alpha*d) > function.fEval(x)):
-          options={'xatol': 1e-12, 'maxiter': 500000, 'disp': 0}
-          def InnerFunction(t):  # Hidden from outer code
-              return function.fEval(x + t*d)
-          res = minimize_scalar(InnerFunction, bounds=(0, alphaMax), method='bounded', options = options)
-          alpha = min(res.x, alphaMax)
-      
-      lambdas[:] = [i * (1 + alpha) for i in lambdas]
-      #Max step, need to delete a vertex.
-      if(alpha != alphaMax):
-          lambdas[indexMax] -= alpha
-      else:
-          deleteVertexIndex(indexMax, activeSet, lambdas)
-          vertvar = -1
-    return x + alpha*d, vertvar, FWGap
-
-#Perform one step of the Pairwise FW algorithm
-#Also specifies if the number of vertices has decreased var = -1 or
-#if it has increased var = +1. Otherwise 0.
-def pairwiseStepFW(function, feasibleReg, x, activeSet, lambdas, typeStep):
-    grad = function.fEvalGrad(x)
-    v = feasibleReg.LPOracle(grad)
-    a, index = feasibleReg.AwayOracle(grad, activeSet)
-    vertVar = 0
-    #Find the weight of the extreme point a in the decomposition.
-    alphaMax = lambdas[index]
-    #Update weight of away vertex.
-    d = v - a
-    optStep = stepSize(function, d, grad, x, typeStep, maxStep = alphaMax)
-    alpha = min(optStep, alphaMax)
-    lambdas[index] -= alpha
-    if(alpha == alphaMax):
-        deleteVertexIndex(index, activeSet, lambdas)
-        vertVar = -1
-    #Update the FW vertex
-    flag, index = newVertexFailFast(v, activeSet)
-    if(flag):
-        activeSet.append(v)
-        lambdas.append(alpha)
-        vertVar = 1
-    else:
-        lambdas[index] += alpha
-    return x + alpha*d, vertVar, np.dot(grad, x - v)
-
-#Perform one step of the Lazified AFW algorithm
-#Also specifies if the number of vertices has decreased var = -1 or
-#if it has increased var = +1. Otherwise 0.
-def awayStepFWLazy(function, feasibleReg, x, activeSet, lambdas, phiVal, typeStep):
-    grad = function.fEvalGrad(x)
-    a, indexMax, v, indexMin = maxMinVertex(grad, activeSet)
-    vertvar = 0
-    #Use old FW vertex.
-    if(np.dot(grad, x - v) >= np.dot(grad, a - x) and np.dot(grad, x - v) > phiVal[0]/2.0):
+    if FWGap == 0.0:
+        return x, FWGap
+    if FWGap > np.dot(grad, a - x):
         d = v - x
         alphaMax = 1.0
         optStep = stepSize(function, d, grad, x, typeStep)
         alpha = min(optStep, alphaMax)
-        if(alpha != alphaMax):
+        if function.fEval(x + alpha * d) > function.fEval(x):
+            options = {"xatol": 1e-12, "maxiter": 500000, "disp": 0}
+
+            def InnerFunction(t):  # Hidden from outer code
+                return function.fEval(x + t * d)
+
+            res = minimize_scalar(
+                InnerFunction, bounds=(0, alphaMax), method="bounded", options=options
+            )
+            alpha = min(res.x, alphaMax)
+        if alpha != alphaMax:
+            # newVertex returns true if vertex is new.
+            flag, index = newVertexFailFast(v, activeSet)
             lambdas[:] = [i * (1 - alpha) for i in lambdas]
-            lambdas[indexMin] += alpha
-        #Max step length away step, only one vertex now.
+            if flag:
+                activeSet.append(v)
+                lambdas.append(alpha)
+            else:
+                # Update existing weights
+                lambdas[index] += alpha
+        # Max step length away step, only one vertex now.
         else:
             activeSet[:] = [v]
             lambdas[:] = [alphaMax]
-            vertvar = -1        
     else:
-        #Use old away vertex.
-        if(np.dot(grad, a - x) > np.dot(grad, x - v) and np.dot(grad, a - x) > phiVal[0]/2.0):
+        d = x - a
+        alphaMax = lambdas[indexMax] / (1.0 - lambdas[indexMax])
+        optStep = stepSize(function, d, grad, x, typeStep, maxStep=alphaMax)
+        alpha = min(optStep, alphaMax)
+        if function.fEval(x + alpha * d) > function.fEval(x):
+            options = {"xatol": 1e-12, "maxiter": 500000, "disp": 0}
+
+            def InnerFunction(t):  # Hidden from outer code
+                return function.fEval(x + t * d)
+
+            res = minimize_scalar(
+                InnerFunction, bounds=(0, alphaMax), method="bounded", options=options
+            )
+            alpha = min(res.x, alphaMax)
+        if alpha < 1.0e-9:
+            alpha = alphaMax
+        lambdas[:] = [i * (1 + alpha) for i in lambdas]
+        # Max step, need to delete a vertex.
+        if alpha != alphaMax:
+            lambdas[indexMax] -= alpha
+        else:
+            deleteVertexIndex(indexMax, activeSet, lambdas)
+    return x + alpha * d, FWGap
+
+
+def pairwiseStepFW(function, feasibleReg, x, activeSet, lambdas, typeStep):
+    """
+    Performs a single step of the PCG/PFW algorithm.
+
+    Parameters
+    ----------
+    function: function being minimized
+        Function that we will minimize.
+    feasibleReg : feasible region function.
+        Returns LP oracles over feasible region.
+    x : numpy array.
+        Point.
+    activeSet : list of numpy arrays.
+        Initial active set.
+    lambdas : list of floats.
+        Initial barycentric coordinates.
+    typeStep : str
+        Type of step size used.
+   
+    Returns
+    -------
+    x + alpha*d
+        Output point
+    FWGap
+        FW gap at initial point.
+        
+    """
+    grad = function.fEvalGrad(x)
+    v = feasibleReg.LPOracle(grad)
+    a, index = feasibleReg.AwayOracle(grad, activeSet)
+    # Find the weight of the extreme point a in the decomposition.
+    alphaMax = lambdas[index]
+    # Update weight of away vertex.
+    d = v - a
+    alpha = stepSize(function, d, grad, x, typeStep, maxStep=alphaMax)
+    lambdas[index] -= alpha
+    # Before this was an equality.
+    if alphaMax - alpha < 1.0e-8:
+        deleteVertexIndex(index, activeSet, lambdas)
+    # Update the FW vertex
+    flag, index = newVertexFailFast(v, activeSet)
+    if flag:
+        activeSet.append(v)
+        lambdas.append(alpha)
+    else:
+        lambdas[index] += alpha
+    return x + alpha * d, np.dot(grad, x - v)
+
+
+def awayStepFWLazy(function, feasibleReg, x, activeSet, lambdas, phiVal, typeStep):
+    """
+    Performs a single step of the Lazy ACG/AFW algorithm.
+
+    Parameters
+    ----------
+    function: function being minimized
+        Function that we will minimize.
+    feasibleReg : feasible region function.
+        Returns LP oracles over feasible region.
+    x : numpy array.
+        Point.
+    activeSet : list of numpy arrays.
+        Initial active set.
+    lambdas : list of floats.
+        Initial barycentric coordinates.
+    phiVal : List with a single float
+        Value of phi used in a Lazy AFW step.
+    typeStep : str
+        Type of step size used.
+   
+    Returns
+    -------
+    x + alpha*d
+        Output point
+    FWGap
+        FW gap at initial point.
+        
+    """
+    grad = function.fEvalGrad(x)
+    a, indexMax, v, indexMin = maxMinVertex(grad, activeSet)
+    # Use old FW vertex.
+    if (
+        np.dot(grad, x - v) >= np.dot(grad, a - x)
+        and np.dot(grad, x - v) > phiVal[0] / 2.0
+    ):
+        d = v - x
+        alphaMax = 1.0
+        optStep = stepSize(function, d, grad, x, typeStep)
+        alpha = min(optStep, alphaMax)
+        if alpha != alphaMax:
+            lambdas[:] = [i * (1 - alpha) for i in lambdas]
+            lambdas[indexMin] += alpha
+        # Max step length away step, only one vertex now.
+        else:
+            activeSet[:] = [v]
+            lambdas[:] = [alphaMax]
+    else:
+        # Use old away vertex.
+        if (
+            np.dot(grad, a - x) > np.dot(grad, x - v)
+            and np.dot(grad, a - x) > phiVal[0] / 2.0
+        ):
             d = x - a
-            alphaMax = lambdas[indexMax]/(1.0 - lambdas[indexMax])
-            optStep = stepSize(function, d, grad, x, typeStep, maxStep = alphaMax)
+            alphaMax = lambdas[indexMax] / (1.0 - lambdas[indexMax])
+            optStep = stepSize(function, d, grad, x, typeStep, maxStep=alphaMax)
             alpha = min(optStep, alphaMax)
+            if alpha < 1.0e-9:
+                alpha = alphaMax
             lambdas[:] = [i * (1 + alpha) for i in lambdas]
-            #Max step, need to delete a vertex.
-            if(alpha != alphaMax):
+            # Max step, need to delete a vertex.
+            if alpha != alphaMax:
                 lambdas[indexMax] -= alpha
             else:
                 deleteVertexIndex(indexMax, activeSet, lambdas)
-                vertvar = -1            
         else:
             v = feasibleReg.LPOracle(grad)
-            #New FW vertex.
-            if(np.dot(grad, x - v) > phiVal[0]/2.0):
+            # New FW vertex.
+            if np.dot(grad, x - v) > phiVal[0] / 2.0:
                 d = v - x
                 alphaMax = 1.0
                 optStep = stepSize(function, d, grad, x, typeStep)
                 alpha = min(optStep, alphaMax)
-                #Less than maxStep
-                if(alpha != alphaMax):
-                    #newVertex returns true if vertex is new.
+                # Less than maxStep
+                if alpha != alphaMax:
+                    # newVertex returns true if vertex is new.
                     lambdas[:] = [i * (1 - alpha) for i in lambdas]
                     activeSet.append(v)
                     lambdas.append(alpha)
-                    vertvar = 1
-                #Max step length away step, only one vertex now.
+                # Max step length away step, only one vertex now.
                 else:
                     activeSet[:] = [v]
                     lambdas[:] = [alphaMax]
-                    vertvar = -1                
-            #None of the vertices are satisfactory, halve phi.
+            # None of the vertices are satisfactory, halve phi.
             else:
-                phiVal[0] = phiVal[0]/2.0
+                phiVal[0] = min(np.dot(grad, x - v), phiVal[0] / 2.0)
                 alpha = 0.0
                 d = v - x
-    return x + alpha*d, vertvar, np.dot(grad, x - v)
+    return x + alpha * d, np.dot(grad, x - v)
 
-#Perform one step of the vanilla FW algorithm
-#Also specifies if the number of vertices has decreased var = -1 or
-#if it has increased var = +1. Otherwise 0.
+
 def stepFW(function, feasibleReg, x, activeSet, lambdas, typeStep):
+    """
+    Performs a single step of the Vanilla CG/FW algorithm.
+
+    Parameters
+    ----------
+    function: function being minimized
+        Function that we will minimize.
+    feasibleReg : feasible region function.
+        Returns LP oracles over feasible region.
+    x : numpy array.
+        Point.
+    activeSet : list of numpy arrays.
+        Initial active set.
+    lambdas : list of floats.
+        Initial barycentric coordinates.
+    typeStep : str
+        Type of step size used.
+   
+    Returns
+    -------
+    x + alpha*d
+        Output point
+    FWGap
+        FW gap at initial point.
+        
+    """
     grad = function.fEvalGrad(x)
     v = feasibleReg.LPOracle(grad)
-    vertvar = 0
-    #Choose FW direction, can overwrite index.
+    # Choose FW direction, can overwrite index.
     d = v - x
     alphaMax = 1.0
     optStep = stepSize(function, d, grad, x, typeStep)
     alpha = min(optStep, alphaMax)
-    #Less than maxStep
-    if(alpha != alphaMax):
-        #newVertex returns true if vertex is new.
+    # Less than maxStep
+    if alpha != alphaMax:
+        # newVertex returns true if vertex is new.
         flag, index = newVertexFailFast(v, activeSet)
         lambdas[:] = [i * (1 - alpha) for i in lambdas]
-        if(flag):
+        if flag:
             activeSet.append(v)
             lambdas.append(alpha)
-            vertvar = 1
         else:
-            #Update existing weights
+            # Update existing weights
             lambdas[index] += alpha
-      #Max step length away step, only one vertex now.
+    # Max step length away step, only one vertex now.
     else:
         activeSet[:] = [v]
         lambdas[:] = [alphaMax]
-        vertvar = -1
-    return x + alpha*d, vertvar, np.dot(grad, x - v)
-
-#Decomposition Invariant PFW. Only works for 0/1 polytopes in the unit
-#hypercube which can be expressed in standard form.
-#Can only either use linesearch or fixed step.    
-"""## Decomposition Invariant CG (DICG)
-
-Parameters:
-
-1 --> typeStep: Specifies the type of step. Choosing "EL" performs exact line search
-for the quadratic objective functions. Otherwise choosing "SS" chooses a step
-that minimizes the smoothness equation and ensures progress in every iteration.
-
-2 --> criterion: Specify if the terminating criterion is the primal gap ("PG") or the
-dual gap ("DG"). If anything else is specified will run for a given number of iterations.
-
-3 --> criterionRef: Value to which the algorithm will run, according to the criterion choosen.
-
-"""
-
-def DIPFW(x0, function, feasibleReg, tolerance, maxTime, locOpt, typeStep = "SS", criterion = "PG", criterionRef = 0.0):
-    x = x0.copy()
-    FWGap = []
-    fVal = []
-    timing = []
-    xVal = []
-    itCount = 1
-    grad = function.fEvalGrad(x)
-    v = feasibleReg.LPOracle(grad)
-    timeRef = time.time()
-    while(True):
-        performUpdate(function, x, FWGap, fVal, timing, np.dot(grad, x - v))
-        xVal.append(np.linalg.norm(x - locOpt))
-        if(exitCriterion(itCount, fVal[-1], FWGap[-1], criterion = criterion, numCriterion = tolerance, critRef = criterionRef) or timing[-1] - timing[0] > maxTime):
-            timing[:] = [t - timeRef for t in timing]
-            return x, FWGap, fVal, timing, xVal
-        gradAux = grad.copy()
-        for i in range(len(gradAux)):
-            if(x[i] == 0.0):
-                gradAux[i] = -1.0e15
-        a = feasibleReg.LPOracle(-gradAux)
-        #Find the weight of the extreme point a in the decomposition.
-        d = v - a
-        alphaMax = calculateStepsize(x, d)
-        optStep = stepSizeDI(function,feasibleReg, itCount, d, grad, x, typeStep)
-        alpha = min(optStep, alphaMax)
-        x += alpha*d
-        grad = function.fEvalGrad(x)
-        v = feasibleReg.LPOracle(grad)
-        itCount += 1
+    return x + alpha * d, np.dot(grad, x - v)
