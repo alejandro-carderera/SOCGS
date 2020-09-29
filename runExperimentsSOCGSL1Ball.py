@@ -76,6 +76,12 @@ if __name__ == "__main__":
         required=True,
         help="CG subsolver to use in SOCGS: CG, ACG, PCG, LazyACG.",
     )
+    parser.add_argument(
+        "--known_primal_gap",
+        type=str,
+        required=True,
+        help="True if the primal gap is known, false otherwise.",
+    )
 
     args = parser.parse_args()
     dataset = args.dataset
@@ -85,6 +91,13 @@ if __name__ == "__main__":
     lambdaVal = args.lambda_value
     maxIter = args.max_iter
     type_of_solver = args.type_solver
+    if(args.known_primal_gap == 'True'):
+        known_primal_gap = True
+    else:
+        if(args.known_primal_gap == 'False'):
+            known_primal_gap = False
+        else:
+            assert False, 'Invalid known_primal_gap argument'
 
     if not os.path.exists(os.path.join(os.getcwd(), "Dataset")):
         os.makedirs(os.path.join(os.getcwd(), "Dataset"))
@@ -132,7 +145,6 @@ if __name__ == "__main__":
     )
     fValOpt = fValTest[-1]
     tolerance = max(tolerance, min(np.asarray(FWGapTest)))
-
     if not os.path.exists(os.path.join(os.getcwd(), "l1Ball", "Solutions")):
         os.makedirs(os.path.join(os.getcwd(), "l1Ball", "Solutions"))
     # Saving solution.
@@ -207,6 +219,7 @@ if __name__ == "__main__":
         criterionRef=fValOpt,
         TypeSolver=type_of_solver,
         updateHessian=False,
+        known_primal_gap = known_primal_gap,
         maxIter=maxIter,
     )
 

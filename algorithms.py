@@ -417,6 +417,7 @@ def SOCGS(
     criterionRef=0.0,
     TypeSolver="LazyACG",
     updateHessian=True,
+    known_primal_gap = False,
     maxIter=100,
     omega=0.0,
 ):
@@ -446,11 +447,15 @@ def SOCGS(
     criterion : str
         Criterion for stopping: Dual gap or primal gap (DG, PG)
     criterionRef : float
-        Value of the function evaluated at the optimum.
+        Value of the function evaluated at the optimum. Used to stop the algorithm
+        and optionally to compute the inner loop stopping accuracy
     TypeSolver : str
         Variant used to minimize function. (AFW, PFW, Vanilla, Lazy, DICG)
     updateHessian : bool
         If the quadratic approximation explicitly requires updating Hessian.
+    known_primal_gap : bool
+        If True, then criterionRef will be used to compute the primal gap for the
+        accuracy criterion, otherwisae, alternative strategy will be used.
    maxIter : int
         Maximum number of inner iterations used per outer iteration.
    omega : float
@@ -505,10 +510,23 @@ def SOCGS(
     phiVal = [FWGap[-1]]
     itCount = 0
     while True:
-        # Compute Projected Variable Metric step
-        subprobTol = max(
-            tolerance, ((fVal[-1] - criterionRef) / np.linalg.norm(grad)) ** 4
-        )
+        #Compute the inner problem accuracy using primal gap
+        if(known_primal_gap):
+            subprobTol = max(
+                    tolerance, ((fVal[-1] - criterionRef) / np.linalg.norm(grad)) ** 4
+                    )
+        #Compute the inner problem accuracy using alternative strategy
+        else:
+            xCG_aux = xCG.copy()
+            activeSetCG_aux = activeSetCG.copy()
+            lambdaValCG_aux = lambdaValCG.copy()
+            while(function.fEval(xCG_aux) >= function.fEval(xCG)):
+                xCG_aux, _ = awayStepFW(
+                        function, feasibleReg, xCG_aux, activeSetCG_aux, lambdaValCG_aux, "EL"
+                    )
+            subprobTol = max(
+                    tolerance, ((fVal[-1] - function.fEval(xCG_aux)) / np.linalg.norm(grad)) ** 4
+                    )
         if TypeSolver == "DICG":
             _, xPVM, _, _, _, _, _ = DIPFW(
                 x,

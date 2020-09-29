@@ -37,35 +37,35 @@ In order to reproduce the results from the paper run the following commands. Not
 ### Sparse coding over the Birkhoff polytope with <img src="https://render.githubusercontent.com/render/math?math=m = 10,000"> (Figure 7)
 
 ```
-python runExperimentsSOCGSBirkhoff.py --max_time 600 --type_solver DICG --num_samples 10000 --dimension 80 --accuracy 1.0e-5 --accuracy_Hessian 0.1
+python runExperimentsSOCGSBirkhoff.py --max_time 600 --type_solver DICG --num_samples 10000 --dimension 80 --accuracy 1.0e-5 --accuracy_Hessian 0.1 --known_primal_gap True
 ```
 
 ### Sparse coding over the Birkhoff polytope with <img src="https://render.githubusercontent.com/render/math?math=m = 100,000"> (Figure 8)
 
 ```
-python runExperimentsSOCGSBirkhoff.py --max_time 600 --type_solver DICG --num_samples 100000 --dimension 80 --accuracy 1.0e-5 --accuracy_Hessian 0.1
+python runExperimentsSOCGSBirkhoff.py --max_time 600 --type_solver DICG --num_samples 100000 --dimension 80 --accuracy 1.0e-5 --accuracy_Hessian 0.1 --known_primal_gap True
 ```
 
 ### Inverse covariance estimation over spectrahedron with <img src="https://render.githubusercontent.com/render/math?math=n = 100"> (Figure 9)
 
 ```
-python runExperimentsSOCGSGLasso.py --max_time 600 --type_solver PCG --dimension 100 --accuracy 1.0e-5 --lambda_value 0.05 --delta_value 1.0e-5 --max_iter 100
+python runExperimentsSOCGSGLasso.py --max_time 600 --type_solver PCG --dimension 100 --accuracy 1.0e-5 --lambda_value 0.05 --delta_value 1.0e-5 --max_iter 100 --known_primal_gap False
 ```
 
 ### Inverse covariance estimation over spectrahedron with <img src="https://render.githubusercontent.com/render/math?math=n = 50"> (Figure 10)
 
 ```
-python runExperimentsSOCGSGLasso.py --max_time 600 --type_solver PCG --dimension 50 --accuracy 1.0e-5 --lambda_value 0.05 --delta_value 1.0e-5 --max_iter 100
+python runExperimentsSOCGSGLasso.py --max_time 600 --type_solver PCG --dimension 50 --accuracy 1.0e-5 --lambda_value 0.05 --delta_value 1.0e-5 --max_iter 100 --known_primal_gap False
 ```
 ### Structured logistic regression over <img src="https://render.githubusercontent.com/render/math?math=\ell_1"> unit ball with the *gisette* dataset (Figure 11)
 
 ```
-python runExperimentsSOCGSL1Ball.py --max_time 3600 --type_solver ACG --dataset gisette --accuracy 1.0e-4 --lambda_value 0.05 --max_iter 100
+python runExperimentsSOCGSL1Ball.py --max_time 3600 --type_solver ACG --dataset gisette --accuracy 1.0e-4 --lambda_value 0.05 --max_iter 100 --known_primal_gap False
 ```
 ### Structured logistic regression over <img src="https://render.githubusercontent.com/render/math?math=\ell_1"> unit ball with the *real-sim* dataset (Figure 12)
 
 ```
-python runExperimentsSOCGSL1Ball.py --max_time 120 --type_solver PCG --dataset real-sim --accuracy 1.0e-4 --lambda_value 0.05 --max_iter 100
+python runExperimentsSOCGSL1Ball.py --max_time 120 --type_solver PCG --dataset real-sim --accuracy 1.0e-4 --lambda_value 0.05 --max_iter 100 --known_primal_gap False
 ```
 
 ## Citation

@@ -71,6 +71,12 @@ if __name__ == "__main__":
         required=True,
         help="CG subsolver to use in SOCGS: CG, ACG, PCG, LazyACG, DICG.",
     )
+    parser.add_argument(
+        "--known_primal_gap",
+        type=str,
+        required=True,
+        help="True if the primal gap is known, false otherwise.",
+    )
 
     args = parser.parse_args()
     TIME_LIMIT = args.max_time
@@ -81,6 +87,13 @@ if __name__ == "__main__":
     tolerance = args.accuracy
     omega = args.accuracy_Hessian
     type_of_solver = args.type_solver
+    if(args.known_primal_gap == 'True'):
+        known_primal_gap = True
+    else:
+        if(args.known_primal_gap == 'False'):
+            known_primal_gap = False
+        else:
+            assert False, 'Invalid known_primal_gap argument'
 
     # Generate a function where we know the matrix.
     AMat = np.random.normal(size=(sizeVectorY, sizeVectorX))
@@ -182,6 +195,7 @@ if __name__ == "__main__":
         criterion="PG",
         criterionRef=fValOpt,
         TypeSolver=type_of_solver,
+        known_primal_gap = known_primal_gap,
         omega=omega,
     )
 
